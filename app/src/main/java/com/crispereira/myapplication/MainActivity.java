@@ -1,13 +1,12 @@
 package com.crispereira.myapplication;
 
 import android.content.pm.PackageManager;
+import android.os.Bundle;
 import android.os.StrictMode;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
-import android.os.Bundle;
-
 import androidx.room.Room;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
@@ -17,8 +16,7 @@ import com.crispereira.myapplication.database.MyDb;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
+import java.util.stream.Collectors;
 
 public class MainActivity extends AppCompatActivity {
     public MyDb db;
@@ -31,75 +29,37 @@ public class MainActivity extends AppCompatActivity {
         StrictMode.setThreadPolicy(policy);
 
         Button btBuscar = findViewById(R.id.btSearch);
-        btBuscar.setOnClickListener(new View.OnClickListener() {
+        btBuscar.setOnClickListener(v -> {
+            TextView txtTitle = findViewById(R.id.inputMovie);
+            String title = txtTitle.getText().toString();
+            TextView result = findViewById(R.id.result);
+            String url = "http://www.omdbapi.com/?apikey=e28c429d&t="+title;
 
-            @Override
-            public void onClick(View v) {
-                TextView txtTitle = findViewById(R.id.inputMovie);
-                String title = txtTitle.getText().toString();
-                TextView result = findViewById(R.id.result);
-                String url = "http://www.omdbapi.com/?apikey=e28c429d&t="+title;
+            result.setText(url);
 
-                try {
-                    url = URLEncoder.encode(url, "UTF-8");
-                } catch (UnsupportedEncodingException e) {
-                    e.printStackTrace();
-                }
+            RequestQueue queue = Volley.newRequestQueue(MainActivity.this);
 
-                result.setText(url);
+            StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
+                    response -> {
+                        try{
+                            JSONObject responseJSON = new JSONObject(response);
+                            result.setText(responseJSON.getString("Plot"));
 
-                /*try{
-                    if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.INTERNET) != PackageManager.PERMISSION_GRANTED) {
-                        ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.INTERNET}, 1);
-                    }
-                    else{
-                        result.setText("Connected!");
-                    }
-                } catch (Exception e){
-                    result.setText("Not able to connect!");
-                }*/
+                            String stitle = (responseJSON.getString("Title"));
+                            String year = responseJSON.getString("Year");
+                            String plot = (responseJSON.getString("Plot"));
+                            saveOnMyDb(stitle, year, plot);
+                        }
+                        catch (JSONException e){
+                            e.printStackTrace();
+                        }
+                    },
+                    error -> {
+                        result.setText("nao funciona no json");
+                    });
 
-                RequestQueue queue = Volley.newRequestQueue(MainActivity.this);
-
-                StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
-                        response -> {
-                            try{
-                                JSONObject responseJSON = new JSONObject(response);
-                                result.setText(responseJSON.getString("Plot"));
-
-                                String stitle = (responseJSON.getString("Title"));
-                                String year = responseJSON.getString("Year");
-                                String plot = (responseJSON.getString("Plot"));
-                                saveOnMyDb(stitle, year, plot);
-                            }
-                            catch (JSONException e){
-                                e.printStackTrace();
-                            }
-                        },
-                        error -> {
-                            result.setText("nao funciona no json");
-                        });
-
-                /*
-
-                // Request a string response from the provided URL.
-                StringRequest stringRequest = new StringRequest(Request.Method.GET, url,
-                        new Response.Listener<String>() {
-                            @Override
-                            public void onResponse(String response) {
-                                // Display the first 500 characters of the response string.
-                                result.setText("Response is: "+ response.substring(0,500));
-                            }
-                        }, new Response.ErrorListener() {
-                    @Override
-                    public void onErrorResponse(VolleyError error) {
-                        result.setText("nao ta funcionando no volley a url recebida: "+url);
-                    }
-                });*/
-
-                // Add the request to the RequestQueue.
-                queue.add(stringRequest);
-            }
+            // Add the request to the RequestQueue.
+            queue.add(stringRequest);
         });
     }
 
@@ -131,10 +91,16 @@ public class MainActivity extends AppCompatActivity {
         TextView result = findViewById(R.id.result);
 
         db = Room.databaseBuilder(getApplicationContext(),
-                MyDb.class, "database-of-movies").build();
-        db.getMovieDAO().insert(new Movie(title, year, plot));
+                MyDb.class, "database-of-movies")
+                .fallbackToDestructiveMigration()
+                .allowMainThreadQueries()
+                .build();
 
-        result.setText("Dados salvos no Banco de Dados");
-
+        if (!db.getMovieDAO().getAll().stream().map(Movie::getTitle).collect(Collectors.toList()).contains(title)) {
+            db.getMovieDAO().insert(new Movie(title, year, plot));
+            result.setText("Dados salvos no Banco de Dados");
+        } else {
+            result.setText("Filme já salvo");
+        }
     }
 }

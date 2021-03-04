@@ -17,6 +17,8 @@ public class Movie {
 
     public Movie(@NonNull String title, @NonNull String year, @NonNull String plot){
         this.title = title;
+        this.year = year;
+        this.plot = plot;
     }
 
     public void setTitle(String title) {
