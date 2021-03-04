@@ -1,28 +1,27 @@
 package com.crispereira.myapplication;
 
-import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.StrictMode;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
-import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 
-import androidx.core.app.ActivityCompat;
+import androidx.room.Room;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
 import com.android.volley.toolbox.StringRequest;
 import com.android.volley.toolbox.Volley;
+import com.crispereira.myapplication.database.MyDb;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Queue;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
 
 public class MainActivity extends AppCompatActivity {
+    public MyDb db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,8 +37,14 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 TextView txtTitle = findViewById(R.id.inputMovie);
                 String title = txtTitle.getText().toString();
-                final TextView result = findViewById(R.id.result);
-                final String url = "http://www.omdbapi.com/?apikey=e28c429d&t="+title;
+                TextView result = findViewById(R.id.result);
+                String url = "http://www.omdbapi.com/?apikey=e28c429d&t="+title;
+
+                try {
+                    url = URLEncoder.encode(url, "UTF-8");
+                } catch (UnsupportedEncodingException e) {
+                    e.printStackTrace();
+                }
 
                 result.setText(url);
 
@@ -60,16 +65,19 @@ public class MainActivity extends AppCompatActivity {
                         response -> {
                             try{
                                 JSONObject responseJSON = new JSONObject(response);
-                                result.setText("That work!");
+                                result.setText(responseJSON.getString("Plot"));
+
+                                String stitle = (responseJSON.getString("Title"));
+                                String year = responseJSON.getString("Year");
+                                String plot = (responseJSON.getString("Plot"));
+                                saveOnMyDb(stitle, year, plot);
                             }
                             catch (JSONException e){
                                 e.printStackTrace();
                             }
-                            //result.setText("Response: " + response.toString());
-                            result.setText("That work!");
                         },
                         error -> {
-                            result.setText("nao funciona no json, a url eh:"+url);
+                            result.setText("nao funciona no json");
                         });
 
                 /*
@@ -117,5 +125,16 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
         }
+    }
+
+    public void saveOnMyDb(String title, String year, String plot){
+        TextView result = findViewById(R.id.result);
+
+        db = Room.databaseBuilder(getApplicationContext(),
+                MyDb.class, "database-of-movies").build();
+        db.getMovieDAO().insert(new Movie(title, year, plot));
+
+        result.setText("Dados salvos no Banco de Dados");
+
     }
 }
